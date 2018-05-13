@@ -252,7 +252,7 @@ static void usage()
 #define LONGOPT2(x,y) y
 #endif
 
-    fprintf(stderr,
+    fprintf(stdout,
             "syntax: dvdauthor [-o VTSBASE | -n] [options] VOBFILE(s)\n"
             "\n\t-x XMLFILE where XMLFILE is a configuration file describing the\n"
             "\t    structure of the DVD to create.  If you use a config file, then you\n"
