@@ -6,6 +6,8 @@
  * 13.11.2004, Ralf Engels <ralf-engels@gmx.de> added lang options for titles,
  *                                              conversion to write-xml2 lib
  * 28.11.2004, Ralf Engels <ralf-engels@gmx.de> added button and command support
+ * Copyright (C) 2018 James E. Flemer <jflemer@alum.rpi.edu>
+ *                    dvd title & output dir options
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -533,10 +535,11 @@ static const char * const subp_control_modes[4]={
 };
 
 /* Output attributes for a pgcs (program group chain sequence) */
-static void dump_pgcs(const ifo_handle_t *ifo, const pgcit_t *pgcs, const struct attrblock *ab, int titleset, int titlef, xmlNodePtr titleNode)
+static void dump_pgcs(const ifo_handle_t *ifo, const pgcit_t *pgcs, const struct attrblock *ab, int titleset, int titlef, int use_title, xmlNodePtr titleNode)
   {
-    if (pgcs)
-      {
+    if (!pgcs)
+        return;
+
         int i, j, titlenr, titletotal;
         titlenr = 0;
         if (titlef)
@@ -629,7 +632,7 @@ static void dump_pgcs(const ifo_handle_t *ifo, const pgcit_t *pgcs, const struct
                 else
                     AddAttribute(pgcNode, "pause", "%d", pgc->still_time);
               } /*if*/
-            for (j = 0; j < ab->numaudio; j++)
+            for (j = 0; use_title < 0 && j < ab->numaudio; j++)
               {
                 xmlNodePtr const audioNode = NewChildTag(pgcNode, "audio");
                 if (pgc->audio_control[j] & 0x8000)
@@ -642,7 +645,7 @@ static void dump_pgcs(const ifo_handle_t *ifo, const pgcit_t *pgcs, const struct
                     xmlNewProp(audioNode, (const xmlChar *)"present", (const xmlChar *)"no");
                   } /*if*/
               } /*for*/
-            for (; j < 8; j++)
+            for (j = ab->numaudio; j < 8; j++)
               {
                 if (pgc->audio_control[j] & 0x8000)
                     fprintf
@@ -653,7 +656,7 @@ static void dump_pgcs(const ifo_handle_t *ifo, const pgcit_t *pgcs, const struct
                         ab->numaudio
                       );
               } /*for*/
-            for (j = 0; j < ab->numsubp; j++)
+            for (j = 0; use_title < 0 && j < ab->numsubp; j++)
               {
                 xmlNodePtr const subpNode = NewChildTag(pgcNode, "subpicture");
                 if (pgc->subp_control[j] & 0x80000000)
@@ -730,7 +733,7 @@ static void dump_pgcs(const ifo_handle_t *ifo, const pgcit_t *pgcs, const struct
                     xmlNewProp(subpNode, (const xmlChar *)"present", (const xmlChar *)"no");
                   } /*if*/
               } /*for*/
-            for (; j < 32; j++)
+            for (j = ab->numsubp; j < 32; j++)
               {
                 if (pgc->subp_control[j] & 0x80000000)
                     fprintf
@@ -744,6 +747,8 @@ static void dump_pgcs(const ifo_handle_t *ifo, const pgcit_t *pgcs, const struct
               } /*for*/
             if
               (
+                    use_title < 0
+                &&
                     pgc->command_tbl
                 &&
                     pgc->command_tbl->nr_of_pre > 0
@@ -853,6 +858,8 @@ static void dump_pgcs(const ifo_handle_t *ifo, const pgcit_t *pgcs, const struct
               } /*for*/
             if
               (
+                    use_title < 0
+                &&
                     pgc->command_tbl
                 &&
                     pgc->command_tbl->nr_of_post > 0
@@ -865,7 +872,6 @@ static void dump_pgcs(const ifo_handle_t *ifo, const pgcit_t *pgcs, const struct
                                   pgc->command_tbl->post_cmds);
               } /*if*/
           } /*for*/
-      } /*if*/
   } /*dump_pgcs*/
 
 /* Output attributes for a fpc (first play chain sequence) */
@@ -1084,6 +1090,9 @@ static void getVobs(dvd_reader_t *dvd, const ifo_handle_t *ifo, int titleset, in
       {
         cells = cptr->cell_adr_table;
         numcells = (cptr->last_byte + 1 - C_ADT_SIZE) / sizeof(cell_adr_t);
+//my $pgc = $vts_file->vts_pgcit->pgci_srp($vtitle->ptt(0)->pgcn - 1)->pgc;
+//numcells = pgc->nr_of_cells;
+
       }
     else
       {
@@ -1159,6 +1168,7 @@ static void getVobs(dvd_reader_t *dvd, const ifo_handle_t *ifo, int titleset, in
             fprintf(stderr, "ERR:  Cannot open %s for writing\n", filenamebase);
             exit(1);
           } /*if*/
+        fprintf(stderr, "DBG:  Cell %d [0x%x - 0x%x]\n", i, cells[i].start_sector, cells[i].last_sector);
         for (b = cells[i].start_sector; b <= cells[i].last_sector; b += BIGBLOCKSECT)
           {
             int rl = cells[i].last_sector + 1 - b;
@@ -1172,7 +1182,7 @@ static void getVobs(dvd_reader_t *dvd, const ifo_handle_t *ifo, int titleset, in
                 fprintf
                   (
                     stderr,
-                    "STAT: [%d] VOB %d, Cell %d (%d%%, %d:%02d remain)\r",
+                    "STAT: [%d] VOB %d, Cell %d (%d%%, %d:%02d remain)\n",
                     i,
                     cells[i].vob_id,
                     cells[i].cell_id,
@@ -1185,15 +1195,17 @@ static void getVobs(dvd_reader_t *dvd, const ifo_handle_t *ifo, int titleset, in
                 fprintf
                   (
                     stderr,
-                    "STAT: [%d] VOB %d, Cell %d (%d%%)\r",
+                    "STAT: [%d] VOB %d, Cell %d (%d%%)\n",
                     i,
                     cells[i].vob_id,
                     cells[i].cell_id,
                     (numsect * 100 + totalsect / 2) / totalsect
                   );
+            errno = 0;
             if (DVDReadBlocks(vobs, b, rl, bigblock) < rl)
               {
-                fprintf(stderr, "\nERR:  Error %d reading data: %s\n", errno, strerror(errno));
+                fprintf(stderr, "\nERR:  Error %d reading data (off=%d, len=%d): %s\n",
+                        errno, b, rl, strerror(errno));
                 break;
               } /*if*/
             numsect += rl;
@@ -1304,10 +1316,15 @@ static void dump_dvd
     dvd_reader_t *dvd,
     int titleset, /* titleset nr, 0 for VMG */
     int titlef, /* 0 for menu, 1 for title */
+    int use_title, //< title number to dump, or -1
     xmlNodePtr titlesetNode /* parent node to attach dump to */
   )
   {
     ifo_handle_t *ifo;
+
+    // skip menu if dumping a specific title
+    if (use_title > 0 && titlef == 0)
+        return;
 
     if (titleset < 0 || titleset > 99)
       {
@@ -1362,7 +1379,7 @@ static void dump_dvd
 
         get_attr(ifo, titlef, &ab);
         dump_attr( &ab, titleNode );
-        dump_pgcs(ifo, ifo->vts_pgcit, &ab, titleset, titlef, titleNode);
+        dump_pgcs(ifo, ifo->vts_pgcit, &ab, titleset, titlef, use_title, titleNode);
       }
     else
       {
@@ -1391,7 +1408,7 @@ static void dump_dvd
                 addLangAttr(menusNode, lu->lang_code);
                 get_attr(ifo, titleset == 0 ? -1 : 0, &ab);
                 dump_attr(&ab, menusNode);
-                dump_pgcs(ifo, lu->pgcit, &ab, titleset, titlef, menusNode);
+                dump_pgcs(ifo, lu->pgcit, &ab, titleset, titlef, use_title, menusNode);
               } /*for*/
           } /*if*/
       } /*if*/
@@ -1399,32 +1416,112 @@ static void dump_dvd
     ifoClose(ifo);
   } /*dump_dvd*/
 
+static int get_dvd_title(const char *path, char *title, size_t max_len)
+  /* extracts dvd title string from device */
+  {
+    int ok = 0;
+    int fd;
+    struct stat sb;
+    char buf[2048];
+    size_t pos, sz, len;
+
+    if (!path || !title || max_len < 1)
+        return 0;
+
+    fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return 0;
+
+    if (fstat(fd, &sb) < 0 || (!S_ISBLK(sb.st_mode) && !S_ISCHR(sb.st_mode)))
+      {
+        close(fd);
+        return 0;
+      } /*if*/
+
+    if (lseek(fd, 16*2048, SEEK_SET) != -1 && 2048 == read(fd, buf, 2048))
+      {
+        sz = (max_len > 32) ? 32 : max_len - 1;
+        for (len = 0, pos = 0; pos < sz && buf[40+pos]; ++pos)
+          {
+            if (buf[40+pos] != ' ')
+                len = pos + 1;
+          } /*for*/
+        if (len > 0)
+          {
+            strncpy(title, &buf[40], len);
+            title[len] = '\0';
+            ok = 1;
+          } /*if*/
+      } /*if*/
+
+    close(fd);
+    return ok;
+  } /*get_dvd_title*/
+
 static void usage(void)
 {
-    fprintf(stderr,"syntax: dvdunauthor pathname\n"
+    fprintf(stderr,"syntax: dvdunauthor [-N] [-o dir] pathname\n"
             "\n"
             "\tpathname can either be a DVDROM device name, an ISO image, or a path to\n"
             "\ta directory with the appropriate files in it.\n"
         );
-    exit(1);
+    exit(64);
+}
+
+int find_title_set_for_title(dvd_reader_t *dvd, int ttn)
+{
+    int vtsn = -1;
+    ifo_handle_t *ifo;
+    ifo = ifoOpen(dvd, 0);
+    if (NULL == ifo)
+        return -1;
+    // find title set
+    if (ttn < 1 || ttn > ifo->tt_srpt->nr_of_srpts)
+        return -1;
+    numtitlesets = ifo->vmgi_mat->vmg_nr_of_title_sets;
+    vtsn = ifo->tt_srpt->title[ttn - 1].title_set_nr;
+    ifoClose(ifo);
+    return vtsn;
 }
 
 int main(int argc, char **argv)
   {
     xmlDocPtr  myXmlDoc;
     xmlNodePtr mainNode;
+    xmlNodePtr vmgmNode;
     xmlNodePtr titlesetNode;
 
     dvd_reader_t *dvd;
     int i;
     char *devname = 0;
+    char *outpath = 0;
+    int use_name = 0;
+    char name[128];
+    int use_title_set = -1;
+    int use_title = -1;
+    int force = 0;
 
     fputs(PACKAGE_HEADER("dvdunauthor"), stderr);
 
-    while (-1 != (i = getopt(argc, argv, "h")))
+    while (-1 != (i = getopt(argc, argv, "fhNo:T:t:")))
       {
         switch(i)
           {
+        case 'f':
+            force = 1;
+            break;
+        case 'N':
+            use_name = 1;
+            break;
+        case 'o':
+            outpath = optarg;
+            break;
+        case 'T':
+            use_title_set = atoi(optarg);
+            break;
+        case 't':
+            use_title = atoi(optarg);
+            break;
         case 'h':
         default:
             usage();
@@ -1445,13 +1542,55 @@ int main(int argc, char **argv)
         return 1;
       } /*if*/
 
+    if (use_name)
+      {
+        if (!get_dvd_title(devname, name, sizeof(name)))
+          {
+            strncpy(name, "UNKNOWN", sizeof(name));
+            fprintf(stderr, "ERR:  Cannot get DVD name, using: %s\n", name);
+          } /*if*/
+      } /*if*/
+
+    if (outpath && chdir(outpath) < 0)
+      {
+        fprintf(stderr, "ERR:  Cannot set working directory: %s - %s\n",
+            outpath, strerror(errno));
+        exit(1);
+      } /*if*/
+    if (use_name)
+      {
+        if (mkdir(name, 0777) < 0 && !force)
+          {
+            fprintf(stderr, "ERR:  Cannot make DVD name directory: %s%s%s - %s\n",
+                outpath ? outpath : "", outpath ? "/" : "", name, strerror(errno));
+            exit(1);
+          } /*if*/
+        if (chdir(name) < 0)
+          {
+            fprintf(stderr, "ERR:  Cannot set working directory: %s%s%s - %s\n",
+                outpath ? outpath : "", outpath ? "/" : "", name, strerror(errno));
+            exit(1);
+          } /*if*/
+      } /*if*/
+
+    // get title set number for title
+    if (use_title > 0)
+    {
+        use_title_set = find_title_set_for_title(dvd, use_title);
+        fprintf(stderr, "\n\nINFO: Using VTS %d for Title %d\n", use_title_set, use_title);
+    }
+
     myXmlDoc = xmlNewDoc( (xmlChar *)"1.0" );
     mainNode = xmlNewDocNode(myXmlDoc, NULL, (xmlChar *)"dvdauthor", NULL);
     xmlDocSetRootElement(myXmlDoc, mainNode);
     xmlNewProp(mainNode, (const xmlChar *)"allgprm", (const xmlChar *)"yes");
+    vmgmNode = NewChildTag(mainNode, "vmgm");
 
     for (i = 0; i <= numtitlesets; i++)
       {
+        if (use_title_set > 0 && i != use_title_set)
+            continue;
+
         if (i)
           {
           /* dump a titleset menu */
@@ -1463,14 +1602,14 @@ int main(int argc, char **argv)
           {
           /* dump the VMG menu */
             fprintf(stderr, "\n\nINFO: VMGM\n");
-            titlesetNode = NewChildTag(mainNode, "vmgm");
+            titlesetNode = vmgmNode;
           } /*if*/
-        dump_dvd(dvd, i, 0, titlesetNode);
+        dump_dvd(dvd, i, 0, use_title, titlesetNode);
         if (i)
           {
           /* dump a titleset title */
             fprintf(stderr, "\n\nINFO: VTS %d/%d\n", i, numtitlesets);
-            dump_dvd(dvd, i, 1, titlesetNode);
+            dump_dvd(dvd, i, 1, use_title, titlesetNode);
           } /*if*/
       } /*for*/
 

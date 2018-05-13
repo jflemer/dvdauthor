@@ -1,5 +1,6 @@
-0.7.2+: 2017 July 4
-    No longer automatically build with ImageMagick or GraphicsMagick if
+0.7.2+: 2018 May 12
+	Minor new features to select title to unauthor, and output
+	No longer automatically build with ImageMagick or GraphicsMagick if
 	    present; now need to explicitly specify --with-imagemagick or
 		--with-graphicsmagick to configure
 
