@@ -1,8 +1,13 @@
+ACLOCAL_AMFLAGS = -I m4
+
 SUBDIRS = doc src
 
 noinst_DATA = dvdauthor.spec
 
-EXTRA_DIST = dvdauthor.spec dvdauthor.spec.in
+EXTRA_DIST = \
+	debian \
+	dvdauthor.spec \
+	dvdauthor.spec.in
 
 edit = sed \
 	-e 's,@sysconfdir\@,$(sysconfdir),g' \

@@ -1,0 +1,4 @@
+The debian package includes a number of smaller patches that include
+spelling errors, and smaller boundary checks.
+
+The patches are in quilt format in debian/patches

@@ -1,0 +1,26 @@
+dvdauthor for Debian
+-------------------
+
+  * In answer to the bug-report #225800, the upstream author ("Scott T. Smith"
+  <scott@gelatinous.com> ) replied:
+
+  I should just delete the script.  It used to create the directories; now
+  dvdauthor creates them.  I only keep the script around because it can
+  delete a previously authored disc.  Of course I know how to type 'rm -r
+  -f'... it carries some historical significance -- you can create a conf
+  file or set the WORKDIR environment variable so dvdauthor will always
+  author the dvd in the same place -- useful if you have a separate HDD
+  that you use for authoring.  In order to ease deleting from the remote
+  directory I keep the script around
+
+  * In order not to overwrite custom macros (AM_ICONV) aclocal should
+  not be run unless the libraries are the 'latest' ones. for example,
+  if you don't have iconv installed, then ./configure would detect that
+  and be fine.  But if you run aclocal without gettext/iconv installed,
+  then the macro for AM_ICONV will be overwritten, and the 'autoconf'
+  program will fail, thus not allowing you to even run './configure'
+
+  * Upstream added it's own man pages in SGML. For the time being,
+  I keep the Debian versions included to allow merging of the information.
+
+ -- Marc Leeman <marc.leeman@gmail.com>, Wed,  14 Jan 2004 21:03:32 +0200
