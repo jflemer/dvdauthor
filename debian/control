@@ -1,0 +1,24 @@
+Source: dvdauthor
+Section: otherosfs
+Priority: optional
+Maintainer: James E. Flemer <jflemer@alum.rpi.edu>
+Build-Depends: debhelper (>= 10),
+               bison,
+               docbook-utils,
+               flex,
+               libdvdread-dev,
+               libfontconfig1-dev,
+               libfribidi-dev,
+               libgraphicsmagick1-dev,
+               libpng-dev,
+               libxml2-dev
+Standards-Version: 4.1.2
+Vcs-Git: https://github.com/jflemer/dvdauthor.git
+Vcs-Browser: https://github.com/jflemer/dvdauthor
+
+Package: dvdauthor
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: create DVD-Video file system
+ dvdauthor is a program that will generate a DVD movie from a valid
+ mpeg2 stream that should play when you put it in a DVD player.

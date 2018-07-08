@@ -28,3 +28,11 @@ src/dvdvmy.c
 src/dvdvmy.h
 src/stamp-h1
 src/*.o
+debian/.debhelper/
+debian/autoreconf.after
+debian/autoreconf.before
+debian/debhelper-build-stamp
+debian/dvdauthor.debhelper.log
+debian/dvdauthor.substvars
+debian/dvdauthor/
+debian/files
